@@ -60,7 +60,12 @@ captures decoded to a COMMANDS entry; none was unknown.
 
   Corroborated independently by the app's JavaScript, which writes the
   vibration test as `07 07 0a 04 <left> <right> 00 00` (COMMANDS
-  'set_vibrate_test', 4-byte payload) and listens on the 0xffa0 collection
+  'set_vibrate_test', 4-byte payload). Tried from Linux on a real pad
+  (2026-10-10): the pad answers status 0 and plays ONE short pulse that stops by
+  itself; the strength follows the value as a percentage (0a weak, 64 strong);
+  but either byte drives BOTH motors, so it previews a strength, not a side;
+  all zeros does nothing (capture 02 only ever shows that form). It stores
+  nothing: a backup diffed identical afterwards. The app also listens on the 0xffa0 collection
   for two unsolicited reports in the same framing:
       06 1a 0a 03 ...   live pad state (sticks, buttons, RGB triplets)
       06 05 0a 0d <f>   "profile changed on the pad"; bit 4 keys, 1 sticks,

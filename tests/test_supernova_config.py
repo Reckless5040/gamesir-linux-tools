@@ -44,6 +44,8 @@ class FakePad:
         if name == 'save_config_page':
             self.saves += 1
             return b'\x00'
+        if name == 'set_vibrate_test':
+            return b'\x00'              # a pulse; stores nothing (real pad, 2026-10-10)
         kind = name[4:]
         key = self._get_key_for_set(kind, payload)
         if len(payload) != len(self.store[key]):

@@ -1237,7 +1237,14 @@ class GamesirBridge(QObject):
 
     @Property(bool, notify=controllerChanged)
     def rumbleTestSupported(self):
-        """control.rumble drives the Cyclone/G7 motor commands only."""
+        """Cyclone/G7: control.rumble's motor commands. Super Nova: the pad's own
+        test pulse (control.supernova_vibrate_test)."""
+        return (self._prof or profiles.DEFAULT).write_style in ('cyclone', 'g7', 'supernova')
+
+    @Property(bool, notify=controllerChanged)
+    def rumbleTestPerMotor(self):
+        """Whether a test drives one motor. The Super Nova's test pulse runs both
+        whichever side it's sent for, so its page tests a strength instead."""
         return (self._prof or profiles.DEFAULT).write_style in ('cyclone', 'g7')
 
     @Property(bool, notify=controllerChanged)
@@ -2872,6 +2879,10 @@ class GamesirBridge(QObject):
 
     @Slot()
     def rumbleTest(self):
+        if self._prof is not None and self._prof.write_style == 'supernova':
+            # Its test pulse always runs both motors; the per-slider tests cover it.
+            self.rumbleTestStatus.emit(False, 'Use the test under each strength slider.')
+            return
         control.rumble_test(on_done=self.rumbleTestStatus.emit)
 
     @Slot(str, int)
@@ -2884,5 +2895,11 @@ class GamesirBridge(QObject):
             self.rumbleTestStatus.emit(False, 'Trigger tests require a supported G7 Pro.')
             return
         percent = max(0, min(100, int(strength)))
+        if self._prof is not None and self._prof.write_style == 'supernova':
+            if self._sn_applying:
+                self.rumbleTestStatus.emit(False, 'Wait for Apply to finish, then test.')
+                return
+            control.supernova_vibrate_test(motor, percent, on_done=self.rumbleTestStatus.emit)
+            return
         amplitude = (percent * 255 + 50) // 100
         control.rumble_test(on_done=self.rumbleTestStatus.emit, motor=motor, strength=amplitude)

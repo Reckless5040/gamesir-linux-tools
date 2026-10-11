@@ -8,6 +8,10 @@ curated, user-facing summary; the complete history is in git. Format loosely fol
 ## [Unreleased]
 
 ### Added
+- **Super Nova vibration test**: a "Test this strength" button under each
+  vibration slider plays the pad's own short test pulse at that slider's value,
+  before you apply it. The pulse always uses both motors (that's how the pad's
+  test works), and it changes no settings.
 - **Super Nova battery level** in the status bar: the percentage, or "⚡ Charging"
   while it's on a charger (the pad reports no percentage then). Read from the
   pad's device info when it connects and refreshed once a minute; never while

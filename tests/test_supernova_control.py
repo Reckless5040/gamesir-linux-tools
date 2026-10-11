@@ -73,5 +73,48 @@ class SuperNovaControlTests(unittest.TestCase):
         self.assertEqual(dev.writes, [])
 
 
+class SuperNovaVibrationTestTests(unittest.TestCase):
+    """control.supernova_vibrate_test: the pad's own pulse, sent the way it was
+    tried on hardware (2026-10-10): the slider's percent in its side's byte."""
+
+    def setUp(self):
+        profiles.set_active(profiles.SUPER_NOVA)
+        self.pulse, control.SUPERNOVA_TEST_PULSE = control.SUPERNOVA_TEST_PULSE, 0
+        self.pad = FakePad()
+        control.set_supernova_link(self.pad)
+
+    def tearDown(self):
+        control.SUPERNOVA_TEST_PULSE = self.pulse
+        control.clear_supernova_link()
+        profiles.set_active(None)
+
+    def run_test(self, side, percent):
+        done = []
+        control.supernova_vibrate_test(side, percent,
+                                       on_done=lambda ok, msg: done.append((ok, msg))).join(5)
+        return done
+
+    def test_each_side_puts_its_percent_in_its_own_byte(self):
+        self.assertEqual(self.run_test('left', 50), [(True, '')])
+        self.assertEqual(self.run_test('right', 25), [(True, '')])
+        self.assertEqual(self.pad.sent, [('set_vibrate_test', bytes((50, 0, 0, 0))),
+                                         ('set_vibrate_test', bytes((0, 25, 0, 0)))])
+
+    def test_it_never_writes_or_saves_settings(self):
+        self.run_test('left', 100)
+        self.assertEqual(self.pad.writes(), ['set_vibrate_test'])
+        self.assertEqual(self.pad.saves, 0)
+
+    def test_the_percent_is_clamped(self):
+        self.run_test('left', 150)
+        self.assertEqual(self.pad.sent[-1][1], bytes((100, 0, 0, 0)))
+
+    def test_no_pad_reports_instead_of_raising(self):
+        control.clear_supernova_link()
+        [(ok, msg)] = self.run_test('left', 50)
+        self.assertFalse(ok)
+        self.assertIn('not connected', msg)
+
+
 if __name__ == '__main__':
     unittest.main()

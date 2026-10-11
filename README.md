@@ -36,8 +36,9 @@ alongside. It covers:
 - **Motion / gyro** (G7 Pro, G7 Pro 8K PC, Cyclone 2, Tarantula Pro 8K) —
   activation, axis setup, deadzones, output routing and response curves;
   controls adapt to each model's register layout.
-- **Super Nova** — button remaps, vibration strength, stick and trigger
-  deadzones, and its battery level (or "⚡ Charging") over the 2.4 GHz dongle.
+- **Super Nova** — button remaps, vibration strength (with a test pulse to feel
+  it before applying), stick and trigger deadzones, and its battery level (or
+  "⚡ Charging") over the 2.4 GHz dongle.
   It has its own protocol, so it has its own command-line companion too:
   `supernova_tool.py` backs the pad up, diffs it and restores it.
 - **Backup / Restore** — snapshot all 4 profiles + lighting to a JSON file and

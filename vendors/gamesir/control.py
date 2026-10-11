@@ -222,6 +222,41 @@ def rumble_test(on_done=None, motor='grips', strength=0xC0):
     return thread
 
 
+SUPERNOVA_TEST_PULSE = 0.4     # s the test button stays busy (the pulse is shorter)
+
+
+def supernova_vibrate_test(side, percent, on_done=None):
+    """Play the Super Nova's own vibration test pulse at `percent` (0..100).
+
+    `set_vibrate_test` (0a 04) as GameSir's app frames it, <left> <right> 0 0,
+    with the slider's value in its own side's byte. Tried on a real pad from
+    Linux (2026-10-10): one short pulse that stops by itself, its strength
+    following the value (0a weak, 64 strong); either byte drives BOTH motors,
+    so it previews a strength, not a single motor; all zeros does nothing.
+    Nothing is stored (a backup diffed identical afterwards) and nothing is
+    saved. Runs on a worker thread: the request blocks on the pad's reply."""
+    gen = generation()
+    percent = max(0, min(100, int(percent)))
+    payload = bytes((percent, 0, 0, 0) if side == 'left' else (0, percent, 0, 0))
+
+    def run():
+        try:
+            body = supernova_request('set_vibrate_test', payload, gen=gen)
+        except Exception as e:
+            ok, msg = False, f'Could not send the test: {e}'
+        else:
+            ok = len(body) == 1 and body[0] == 0
+            msg = '' if ok else f'The pad refused the test (status {body.hex()}).'
+        if ok:
+            time.sleep(SUPERNOVA_TEST_PULSE)   # one pulse at a time
+        if on_done:
+            on_done(ok, msg)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return thread
+
+
 _g7_seq = 0            # rolling sequence for the G7's enveloped writes
 _g7_seq_lock = threading.Lock()
 
