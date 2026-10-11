@@ -83,6 +83,7 @@ Item {
                 }
                 PillButton {
                     objectName: "testLeftGrip"
+                    visible: bridge.rumbleTestSupported
                     label: "Test left grip (heavy motor)"
                     enabled: !page.testRunning && vibL.value > 0
                              && (!bridge.isG7Pro || bridge.configClaimed)
@@ -102,6 +103,7 @@ Item {
                 }
                 PillButton {
                     objectName: "testRightGrip"
+                    visible: bridge.rumbleTestSupported
                     label: "Test right grip (light motor)"
                     enabled: !page.testRunning && vibR.value > 0
                              && (!bridge.isG7Pro || bridge.configClaimed)
@@ -117,6 +119,7 @@ Item {
                     color: Theme.textDim; font.family: Theme.fontFamily; font.pixelSize: Theme.fontS
                 }
                 PillButton {
+                    visible: bridge.rumbleTestSupported
                     label: "Test both grip motors"
                     enabled: !page.testRunning && (!bridge.isG7Pro || bridge.configClaimed)
                     onClicked: {
