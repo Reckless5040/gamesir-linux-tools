@@ -28,7 +28,9 @@
 #     only searches the system linker cache, never the bundle,
 #   * libxcb-cursor from the build container: Qt 6.5+ needs it for X11
 #     and many distros don't install it by default,
-#   * the app itself, selected exactly as packaging/PKGBUILD selects it.
+#   * the app itself: the repo's TRACKED top-level *.py, vendors/ and qml/ (git
+#     ls-files, so untracked local scripts in the checkout never ship), plus the
+#     assets, udev rules and LICENSE named in step 4.
 #
 # What can't go in: the udev rule. Granting device access needs root on the
 # host, so AppImage users still install 70-gamesir.rules once; the README
@@ -36,8 +38,8 @@
 #
 # Build prerequisites (this machine only, not users'): podman or docker.
 # Inside the container the script installs systemd-devel (libudev headers),
-# libusbx (libusb-1.0) and xcb-util-cursor; gcc, curl, file and Python 3.12 come
-# with the image.
+# libusbx (libusb-1.0), xcb-util-cursor and git; gcc, curl, file and Python 3.12
+# come with the image. The repo must be a git checkout.
 # Downloads: the container image from quay.io; python-appimage from PyPI and its
 # Python build from its GitHub releases; appimagetool from
 # github.com/AppImage/appimagetool.
@@ -48,10 +50,51 @@ PY_VERSION="${PY_VERSION:-3.12}"
 PYSIDE6_VERSION="${PYSIDE6_VERSION:-6.11.2}"   # what the Linux checks ran on
 LINUX_TAG="manylinux_2_28_x86_64"              # the relocatable Python's floor
 GLIBC_MAX="${GLIBC_MAX:-2.34}"                 # PySide6 6.11's; nothing may need more
-BUILD_IMAGE="${BUILD_IMAGE:-quay.io/pypa/manylinux_2_34_x86_64}"
+# Every download is pinned, so the shipped AppImage only changes when these lines
+# do. To bump one: pick the new release, then update its version AND its hash.
+# The image is pinned by digest (the tag is only for humans; podman/docker pull
+# by the digest and refuse anything else):
+#   curl -s 'https://quay.io/api/v1/repository/pypa/manylinux_2_34_x86_64/tag/?limit=20' \
+#     | python3 -c 'import json,sys; [print(t["name"], t["manifest_digest"]) for t in json.load(sys.stdin)["tags"]]'
+BUILD_IMAGE="${BUILD_IMAGE:-quay.io/pypa/manylinux_2_34_x86_64:2026.09.29-1@sha256:775612b592df48028dab9c8e4741605ed9cf050b06cc716423aceca6e6074158}"
 OUT="${OUT:-$REPO/build/appimage}"
 WORK="$OUT/work"
-APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+# A numbered release, never "continuous" (a rolling tag that is rebuilt in place).
+# Hash: the release page lists it per asset, or sha256sum a download.
+APPIMAGETOOL_VERSION="1.9.1"
+APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_VERSION/appimagetool-x86_64.AppImage"
+# python-appimage and its dependencies, installed with --require-hashes (pip
+# refuses anything unlisted or altered). Hashes: https://pypi.org/pypi/<name>/<version>/json
+# (wheel + sdist; charset-normalizer's cp312 manylinux wheel too). The relocatable
+# Python it then downloads comes from a rolling GitHub release that is replaced in
+# place, so it can't be pinned by hash; step 6's import and glibc checks gate it.
+# Single-quoted, so pip gets the backslash continuations as written.
+PYTHON_APPIMAGE_REQUIREMENTS='
+python-appimage==1.4.6 \
+    --hash=sha256:3a120438eea6769a14bbb051e5d0708b40b5a9f993d6dbc39ab4ab127f94ac57 \
+    --hash=sha256:6879f38c4aab1868c6e50cce8a79c85e7e949b3ab157ba3838fd6124802cbb15
+requests==2.34.2 \
+    --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
+    --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
+certifi==2026.7.22 \
+    --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775 \
+    --hash=sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55
+charset-normalizer==3.5.2 \
+    --hash=sha256:3d31298449090ab8d47b7b1b2a555ff73cac7ed438a08b7ac160980c7ebed649 \
+    --hash=sha256:b6b751274acb69d77b3323d6b7dbaa3c7fdfc1eb829b7eb61d262f32e1af9685 \
+    --hash=sha256:39de2a259fc954455c57274dc94c79d5842774e1247a016aff30bc0efed0f4ef
+idna==3.20 \
+    --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c \
+    --hash=sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44
+urllib3==2.8.0 \
+    --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
+    --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
+setuptools==84.0.0 \
+    --hash=sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670 \
+    --hash=sha256:f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73
+'
+HIDAPI_VERSION="0.15.0"
 
 # appimagetool and the python-appimage base are AppImages themselves; extract-
 # and-run means FUSE isn't needed on the build machine.
@@ -81,11 +124,15 @@ if [ -z "${DEADBAND_IN_CONTAINER:-}" ] && [ -z "${NO_CONTAINER:-}" ]; then
 fi
 if [ -n "${DEADBAND_IN_CONTAINER:-}" ]; then
   say "Build container: $(. /etc/os-release; echo "$PRETTY_NAME"), $(ldd --version | head -n1)"
-  dnf install -y -q systemd-devel libusbx xcb-util-cursor >/dev/null \
-    || die "could not install systemd-devel / libusbx / xcb-util-cursor in the container"
+  dnf install -y -q systemd-devel libusbx xcb-util-cursor git-core >/dev/null \
+    || die "could not install systemd-devel / libusbx / xcb-util-cursor / git in the container"
 fi
 command -v gcc >/dev/null || die "gcc is needed to build hidapi"
 command -v curl >/dev/null || die "curl is needed for downloads"
+command -v git >/dev/null || die "git is needed to list the repo's tracked files"
+# safe.directory: inside a rootful container the checkout belongs to another uid.
+git_ls() { git -c safe.directory="$REPO" -C "$REPO" ls-files -z -- "$@"; }
+git_ls >/dev/null 2>&1 || die "$REPO is not a git checkout; the app is copied from its tracked files"
 
 rm -rf "$WORK"
 mkdir -p "$WORK"
@@ -94,7 +141,8 @@ cd "$WORK"
 # 1. Base AppDir: a relocatable Python -------------------------------------------
 say "Fetching python-appimage (Python $PY_VERSION, $LINUX_TAG)"
 "$(command -v python3.12 || command -v python3)" -m venv "$WORK/tools"   # the image's python3 is 3.9
-"$WORK/tools/bin/pip" install --quiet --upgrade pip python-appimage
+printf '%s' "$PYTHON_APPIMAGE_REQUIREMENTS" > "$WORK/tools-requirements.txt"
+"$WORK/tools/bin/pip" install --quiet --require-hashes -r "$WORK/tools-requirements.txt"
 
 recipe="$WORK/recipe"
 mkdir -p "$recipe"
@@ -121,7 +169,7 @@ say "Installing PySide6 $PYSIDE6_VERSION"
 
 say "Building hidapi with the hidraw backend"
 HIDAPI_WITH_HIDRAW=1 "$PYBIN" -m pip install --quiet --no-cache-dir \
-    --no-binary hidapi hidapi
+    --no-binary hidapi "hidapi==$HIDAPI_VERSION"
 backend="$("$PYBIN" -c "import sys; sys.path.insert(0, '$REPO')
 from doctor import _hidapi_backend; print(_hidapi_backend())")"
 case "$backend" in
@@ -148,14 +196,17 @@ bundle_lib() {   # bundle_lib <soname> <required: 1|0>
 bundle_lib libusb-1.0.so.0 1
 bundle_lib libxcb-cursor.so.0 0
 
-# 4. The app (same selection as packaging/PKGBUILD) -------------------------------
+# 4. The app: tracked files only ---------------------------------------------------
 say "Copying the app"
 share="$APPDIR/usr/share/deadband"
 mkdir -p "$share/assets" "$share/packaging/udev"
-cp "$REPO"/*.py "$share"/
+# git ls-files, not a glob: untracked local scripts in the checkout stay out.
+while IFS= read -r -d '' f; do
+  [ -f "$REPO/$f" ] || continue                 # tracked but deleted locally
+  install -D -m 644 "$REPO/$f" "$share/$f"
+done < <(git_ls ':(glob)*.py' vendors qml)
+[ -f "$share/deadband.py" ] || die "deadband.py is not tracked; nothing to run"
 rm -f "$share/smoke_test.py"
-cp -r "$REPO/vendors" "$REPO/qml" "$share"/
-find "$share" -name '__pycache__' -type d -prune -exec rm -rf {} +
 cp "$REPO"/assets/icon.png "$REPO"/assets/icon-64.png "$REPO"/assets/icon-48.png \
    "$REPO"/assets/glyph-pad.png "$REPO"/assets/glyph-pad-dark.png "$share/assets"/
 cp "$REPO/70-gamesir.rules" "$share"/
@@ -222,6 +273,8 @@ say "glibc floor: $floor (from $worst)"
 # 7. Pack ----------------------------------------------------------------------------
 say "Packing"
 curl -fsSL -o "$WORK/appimagetool" "$APPIMAGETOOL_URL"
+echo "$APPIMAGETOOL_SHA256  $WORK/appimagetool" | sha256sum -c --quiet - \
+  || die "appimagetool $APPIMAGETOOL_VERSION does not match its pinned sha256; refusing to run it"
 chmod +x "$WORK/appimagetool"
 mkdir -p "$OUT"
 ARCH=x86_64 "$WORK/appimagetool" --no-appstream "$APPDIR" "$OUT/Deadband-x86_64.AppImage"

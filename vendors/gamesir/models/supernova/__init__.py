@@ -1,1 +1,1 @@
-"""GameSir Super Nova specifics: identities only until its protocol is confirmed."""
+"""GameSir Super Nova specifics: identities, protocol, editor and transport."""

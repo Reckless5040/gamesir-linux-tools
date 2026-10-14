@@ -2631,33 +2631,44 @@ class GamesirBridge(QObject):
         """Apply staged Super Nova edits through its editor: per block, the read
         bytes with only the edited field changed, written, read back, rolled
         back across blocks on any failure, then saved once (editor.apply_edits).
-        Afterwards the config is re-read, so the pages show what the pad holds."""
-        if self._backup_busy or not self._pending:
+        Edits stay staged until the Apply succeeds, as on the other pads; then
+        the config is re-read, so the pages show what the pad holds."""
+        if self._backup_busy or self._sn_applying or not self._pending:
             return
         if (profiles.active() is not self._prof or not profiles.is_recognized()
                 or self._driving != state.get('driving')
                 or state.get('driving') != state.get('selected')):
             self._set_apply_status('Apply refused: controller selection changed; reload its settings')
             return
-        edits = {r['addr']: bytes(r['data']) for r in self._pending.values()}
+        snapshot_pending = copy.deepcopy(self._pending)
+        edits = {r['addr']: bytes(r['data']) for r in snapshot_pending.values()}
         gen = control.generation()           # pin to the live device session
-        self._pending = {}
-        self.pendingChanged.emit()
-        self._set_apply_status('Applying…')
         self._sn_applying = True              # the battery poll stays off the pad
+        self._backup_busy = True              # one Apply at a time
+        self.backupBusyChanged.emit()
+        self._set_apply_status('Applying…')
 
         def run():
             try:
                 written = sn_editor.apply_edits(control.SuperNovaSession(gen), edits)
             except Exception as e:
-                self._set_apply_status(f'⚠ Nothing saved: {e}')
+                self._set_apply_status(f'⚠ Nothing saved: {e} (your edits are still staged)')
             else:
+                for key, r in snapshot_pending.items():
+                    if self._pending.get(key) == r:
+                        del self._pending[key]
+                # A re-read discards pending edits. Defer it if the user staged
+                # another edit while this batch was being applied.
+                if not self._pending:
+                    self._loaded_profile = None   # re-read what the pad now holds
                 self._set_apply_status(
                     'Applied ✓  %d block(s) written, read back and saved' % len(written)
                     if written else 'No changes to apply')
+                self.pendingChanged.emit()
             finally:
                 self._sn_applying = False
-            self._loaded_profile = None       # re-read what the pad now holds
+                self._backup_busy = False
+                self.backupBusyChanged.emit()
         threading.Thread(target=run, daemon=True).start()
 
     def _set_apply_status(self, msg):

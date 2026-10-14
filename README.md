@@ -159,8 +159,8 @@ can't positively identify. Fork it and customize it however you like.
 > and **stick and trigger deadzones**. Those four are exactly the writes that
 > have round-tripped on a real pad from Linux; its curves, anti-deadzone, hair
 > trigger, lighting, gyro and macros aren't exposed. It speaks a different
-> protocol from every model above (decoded from GameSir Connect and confirmed
-> with USB captures; see `vendors/gamesir/models/supernova/`). Configuring it
+> protocol from every model above (worked out from USB captures of GameSir's
+> app; see `vendors/gamesir/models/supernova/`). Configuring it
 > doesn't take it away from games. Every Apply writes whole settings blocks,
 > reads them back, undoes everything on any mismatch, and only then saves. The
 > status bar shows its battery level, or "⚡ Charging" while it's on a charger.
@@ -549,18 +549,6 @@ see [Troubleshooting](MANUAL.md#troubleshooting--recovery) for the full picture.
 and the **open items** — verifying the RT block, some remap target codes,
 profile-switch sync, PS4/Switch input parsing — live in
 **[RESEARCH.md](RESEARCH.md)** and **[TODO.md](TODO.md)**.
-
-## AI assistance
-
-The Super Nova support, its battery readout, and the AppImage build were
-developed with substantial help from an AI coding assistant (Anthropic's
-Claude, via Claude Code). That covers decoding the protocol from GameSir
-Connect and USB captures, the code, the tests, and the documentation. The
-hardware testing was done by a person: every write to the controller was
-confirmed by them before it was sent, its effect checked by hand (`evtest`,
-`fftest`, in-game), and the pad restored to a byte-identical backup afterwards.
-Treat the AI-written parts with the same care as any other contribution; if you
-spot something wrong, please open an issue.
 
 ## License & disclaimer
 

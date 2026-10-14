@@ -12,6 +12,8 @@ from vendors.gamesir.models.supernova import config as nova
 from vendors.gamesir.models.supernova import editor
 from vendors.gamesir.models.supernova import protocol as sn
 
+KEY = dict(sn.REMAP_SOURCES)       # button name -> key code
+
 
 def h(s):
     return bytes.fromhex(s)
@@ -42,7 +44,7 @@ class DecodeTests(unittest.TestCase):
 
     def test_remap_decodes(self):
         a = h('00 00 00 00 00 00 01 00 00 01 01 01 00 00 00 00')     # capture 03: A -> B
-        self.assertEqual(editor.decode_remap(a), sn.KEYS['CIR'])
+        self.assertEqual(editor.decode_remap(a), KEY['B'])
         default = h('00 00 00 00 00 00 01 00 00 00 01 01 01 00 00 00')
         self.assertEqual(editor.decode_remap(default), -1)
         keyboard = h('00 00 00 00 00 00 01 00 00 01 02 01 04 00 00 00')  # type 2
@@ -63,7 +65,7 @@ class ApplyTests(unittest.TestCase):
              '01 00 0a 14 0a 00 17 10 35 32 52 54 5f 64 00 32'),         # capture 05
             (sn.VADDR_STICK_DZ + 0, b'\x0a', 'stick_curve/00/00',
              '00 00 00 00 00 00 00 01 32 0a 00 18 10 37 32 56 54 64 64 00 32'),  # capture 04
-            (key_addr('A'), bytes((1, sn.KEYS['CIR'])), 'key_mapping/00/01',
+            (key_addr('A'), bytes((1, KEY['B'])), 'key_mapping/00/01',
              '00 00 00 00 00 00 01 00 00 01 01 01 00 00 00 00'),         # capture 03
         )
         for addr, data, key, wire in cases:
@@ -88,7 +90,7 @@ class ApplyTests(unittest.TestCase):
 
     def test_default_maps_a_button_back_to_itself(self):
         pad = FakePad()
-        editor.apply_edits(pad, {key_addr('A'): bytes((1, sn.KEYS['CIR']))})
+        editor.apply_edits(pad, {key_addr('A'): bytes((1, KEY['B']))})
         editor.apply_edits(pad, {key_addr('A'): b'\x00\x00'})
         cfg, _ = editor.read_config(pad)
         self.assertEqual(cfg['remap']['A'], -1)
@@ -114,10 +116,28 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(nova.diff(before, nova.snapshot(pad)), {})
         self.assertEqual(pad.saves, 0)
 
+    def test_a_write_that_times_out_is_undone_with_the_rest(self):
+        pad = FakePad()
+        before = nova.snapshot(pad)
+        real = pad.request
+
+        def lost_reply(name, payload=b''):
+            body = real(name, payload)
+            if name == 'set_trigger_param' and payload != before_trig:
+                raise TimeoutError('no reply')      # landed, but the reply was lost
+            return body
+        before_trig = nova.read_block(pad, nova.BLOCKS['trigger_param/00'])
+        pad.request = lost_reply
+        with self.assertRaises(TimeoutError):
+            editor.apply_edits(pad, {sn.VADDR_VIB: b'\x19', sn.VADDR_TRIG_DZ: b'\x0a'})
+        pad.request = real
+        self.assertEqual(nova.diff(before, nova.snapshot(pad)), {})
+        self.assertEqual(pad.saves, 0)
+
     def test_bad_edits_are_refused_before_anything_is_written(self):
         for addr, data in ((sn.VADDR_VIB, b'\x65'),                    # 101 %
                            (sn.VADDR_TRIG_DZ, b'\x5f'),                # = end (95)
-                           (key_addr('A'), bytes((1, sn.KEYS['FL1']))),  # paddle target
+                           (key_addr('A'), bytes((1, KEY['L4']))),     # paddle target
                            (key_addr('A'), b'\x01'),                   # no target
                            (0x0700, b'\x01')):                         # not a feature
             pad = FakePad()

@@ -745,11 +745,11 @@ SUPER_NOVA = ControllerProfile(
 )
 
 
-# --- GameSir Super Nova : recognised, not yet configurable -------------------
+# --- GameSir Super Nova, wired : recognised, input-only ----------------------
 # Detection only, like G7_PRO_OTHER: input works through the kernel's driver and
 # the app names the pad, but there is no write style, no banks and no addresses.
-# Only the wired identity (100e) lands here now: it has never been seen on a
-# real pad, so it gets no write path until it is verified like the dongle was.
+# The wired identity (100e) has no config channel on a real pad, so it gets no
+# write path until one is verified like the dongle's was.
 SUPER_NOVA_OTHER = ControllerProfile(
     name='GameSir Super Nova',
     short='Super Nova',

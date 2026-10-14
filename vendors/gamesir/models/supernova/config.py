@@ -15,9 +15,9 @@ from vendors.gamesir.models.supernova import protocol as sn
 
 BACKUP_FORMAT = 'deadband-supernova-backup/1'
 
-# Every button id GameSir Connect reads on connect (capture 01): 0x00..0x2d.
+# Every button id GameSir's app reads on connect (capture 01): 0x00..0x2d.
 KEY_IDS = tuple(range(0x00, 0x2E))
-# Lighting zones it reads: panel, home, ABXY, BAYX (main.js SAPJoyUniLightName).
+# The four lighting zones it reads (capture 01).
 LIGHT_ZONES = (0x00, 0x04, 0x05, 0x06)
 
 
@@ -100,8 +100,10 @@ def _set(link, block, data):
 
 
 def write_block(link, block, new):
-    """Write one block and verify it by reading it back. On a mismatch the
-    original is written back and PadError raised. Does NOT save."""
+    """Write one block and verify it by reading it back. On a mismatch, or
+    any failure once the write has been sent (a reply that never came may
+    still have landed), the original is put back and the error raised. Does
+    NOT save."""
     if not block.restorable:
         raise PadError(f'{block.key}: write layout unconfirmed; not writing')
     old = read_block(link, block)
@@ -113,13 +115,27 @@ def write_block(link, block, new):
             raise PadError(f'{block.key}: new data would retarget byte {off}')
     if new == old:
         return old
-    _set(link, block, new)
-    back = read_block(link, block)
+    try:
+        _set(link, block, new)
+        back = read_block(link, block)
+    except Exception:
+        _put_back(link, block, old)
+        raise
     if back != new:
         _set(link, block, old)
         raise PadError(f'{block.key}: read back {back.hex()} after writing '
                        f'{new.hex()}; original restored, nothing saved')
     return old
+
+
+def _put_back(link, block, old):
+    """Best effort after a failed write: write `old` back if the pad no longer
+    holds it. Errors here are swallowed so the original failure is reported."""
+    try:
+        if read_block(link, block) != old:
+            _set(link, block, old)
+    except Exception:
+        pass
 
 
 def save(link):

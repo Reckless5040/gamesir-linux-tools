@@ -2,9 +2,9 @@
 """
 GameSir Super Nova - configuration probe, backup and verified writes
 ====================================================================
-The bring-up tool for the Super Nova, ahead of it being configurable in the
-app. Talks to the pad's HID config channel directly (see
-vendors/gamesir/models/supernova/); nothing else in Deadband touches it yet.
+Command-line companion to the app for the Super Nova: backup, diff, restore
+and single verified writes. Talks to the pad's HID config channel directly
+(see vendors/gamesir/models/supernova/).
 
     python3 supernova_tool.py find                  where is it, which identity
     python3 supernova_tool.py info                  device type, firmware
@@ -36,20 +36,15 @@ from vendors.gamesir.models.supernova import transport
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# Xbox names for the face buttons; everything else uses GameSir's own names.
-BUTTON_ALIASES = {'A': 'CRO', 'B': 'CIR', 'X': 'SQU', 'Y': 'TRI',
-                  'LB': 'L1', 'LT': 'L2', 'LS': 'L3', 'RB': 'R1', 'RT': 'R2',
-                  'RS': 'R3', 'VIEW': 'Sel', 'MENU': 'Sta', 'DPAD_LEFT': 'Left',
-                  'DPAD_RIGHT': 'Right', 'DPAD_UP': 'Up', 'DPAD_DOWN': 'Under'}
+# Button names as the app shows them; `Dpad_Up` / `dpad-up` work too.
+BUTTONS = {n.upper().replace(' ', '_'): c for n, c in sn.REMAP_SOURCES}
 
 
 def button(name):
-    key = BUTTON_ALIASES.get(name.upper(), name)
-    for k, code in sn.KEYS.items():
-        if k.lower() == key.lower():
-            return code
-    raise SystemExit(f'unknown button {name!r}; known: '
-                     + ', '.join(sorted(BUTTON_ALIASES) + sorted(sn.KEYS)))
+    code = BUTTONS.get(name.upper().replace(' ', '_').replace('-', '_'))
+    if code is None:
+        raise SystemExit(f'unknown button {name!r}; known: ' + ', '.join(sorted(BUTTONS)))
+    return code
 
 
 def side(name, left, right):

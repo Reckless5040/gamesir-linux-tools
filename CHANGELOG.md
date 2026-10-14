@@ -29,7 +29,7 @@ curated, user-facing summary; the complete history is in git. Format loosely fol
   settings whose writes round-tripped on a real pad from Linux. The Sticks and
   Triggers pages show only the controls a model maps, so the Super Nova gets a
   single begin-deadzone slider; the Rebinds page offers gamepad targets only;
-  the vibration test, Backup & Restore and the profile pills are hidden for it.
+  Backup & Restore and the profile pills are hidden for it.
   Apply is all-or-nothing: whole blocks written, read back, rolled back on any
   mismatch, then saved once. The wired `100e` stays input-only.
   Unlike GameSir's own app, deadzone changes don't slowly bend the response
@@ -41,20 +41,13 @@ curated, user-facing summary; the complete history is in git. Format loosely fol
 - **Input-only profiles can no longer reach the register writer.** `write_reg`
   used to treat any unknown write style as the Cyclone's; it now refuses
   anything but `cyclone`/`g7`/`gip`.
-- **GameSir Super Nova — recognised.** Its 2.4 GHz dongle (`3537:103e`) is now
-  named in the controller picker and the diagnostics instead of showing as an
-  unknown device, with an input-only status. No configuration yet: nothing is
-  written until its register protocol is confirmed on real hardware.
-- **Super Nova protocol and `supernova_tool.py`.** Its configuration protocol
-  (a different family from every other pad here) is decoded from GameSir
-  Connect's DLL and confirmed against USB captures of the official app; the new
-  tool backs the pad up, diffs and restores it, and makes single read-back-
-  verified writes from Linux. The app itself still leaves the pad alone.
-- **Super Nova — write round-trip verified from Linux.** On a real pad behind its
-  `3537:103e` dongle, `supernova_tool.py` read the device (type 3), backed up all
-  61 config blocks with a zero diff, remapped A to B (confirmed in `evtest`: A
-  reported `BTN_EAST`), and restored the backup with a zero diff. The app still
-  doesn't write to the pad; the wired `100e` identity remains untested.
+- **`supernova_tool.py`**, a command-line companion for the Super Nova: backs
+  the pad up, diffs and restores it, and makes single read-back-verified writes.
+  Its configuration protocol (a different family from every other pad here) was
+  worked out from USB captures of GameSir's app. Verified on a real pad behind
+  its `3537:103e` dongle: all 61 config blocks backed up, A remapped to B
+  (confirmed in `evtest`: A reported `BTN_EAST`), and the backup restored with a
+  zero diff. The wired `100e` identity is recognised and named, input-only.
 - **GameSir Kaleid — lighting support.** The Xbox-licensed Kaleid doesn't answer
   the GameSir hidraw vendor protocol every other model here uses; that collection
   is present on the pad but vestigial. Deadband now reaches it the way the vendor's

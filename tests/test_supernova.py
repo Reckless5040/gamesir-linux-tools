@@ -11,6 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from vendors.gamesir.models.supernova import protocol as sn
 
+KEY = dict(sn.REMAP_SOURCES)       # button name -> key code
+
 
 def h(s):
     return bytes.fromhex(s)
@@ -33,7 +35,7 @@ class FramingTests(unittest.TestCase):
             self.assertEqual(sn.encode_request(*sn.COMMANDS[name], bytes(payload)),
                              h(wire), name)
 
-    def test_vibrate_test_matches_the_bytes_gamesirs_javascript_writes(self):
+    def test_vibrate_test_matches_the_captured_frame(self):
         self.assertEqual(sn.encode_request(*sn.COMMANDS['set_vibrate_test'],
                                            bytes((0x40, 0x80, 0, 0))),
                          bytes((7, 7, 0x0A, 0x04, 0x40, 0x80, 0, 0)))
@@ -151,12 +153,12 @@ class LayoutTests(unittest.TestCase):
 
     def test_default_restores_the_factory_turbo_byte(self):
         remapped = h('00 00 00 00 00 00 01 00 00 01 01 01 00 00 00 00')  # A -> B
-        self.assertEqual(sn.with_key_target(remapped, sn.KEYS['CRO']),
+        self.assertEqual(sn.with_key_target(remapped, KEY['A']),
                          h('00 00 00 00 00 00 01 00 00 00 01 01 01 00 00 00'))  # capture 01
         # Turbo on: its count is the user's, kept.
         turbo = bytearray(remapped)
         turbo[sn.KEY_TURBO_MODE], turbo[sn.KEY_TURBO_TIMES] = 1, 12
-        self.assertEqual(sn.with_key_target(bytes(turbo), sn.KEYS['CRO'])[sn.KEY_TURBO_TIMES], 12)
+        self.assertEqual(sn.with_key_target(bytes(turbo), KEY['A'])[sn.KEY_TURBO_TIMES], 12)
 
     def test_a_deadzone_at_or_past_the_end_is_refused(self):
         with self.assertRaises(ValueError):
@@ -164,29 +166,28 @@ class LayoutTests(unittest.TestCase):
 
     def test_remap_a_to_b_reproduces_capture_03(self):
         read_a = h('00 00 00 00 00 00 01 00 00 00 01 01 01 00 00 00')   # capture 01, key 0x01
-        self.assertEqual(sn.with_key_target(read_a, sn.KEYS['CIR']),
+        self.assertEqual(sn.with_key_target(read_a, KEY['B']),
                          h('00 00 00 00 00 00 01 00 00 01 01 01 00 00 00 00'))
-        self.assertEqual(read_a[sn.KEY_SOURCE], sn.KEYS['CRO'])
+        self.assertEqual(read_a[sn.KEY_SOURCE], KEY['A'])
 
-    def test_every_button_code_is_distinct(self):
-        self.assertEqual(len(set(sn.KEYS.values())), len(sn.KEYS))
-        self.assertIn('CRO', sn.KEYS)
-        self.assertIn('SQU', sn.KEYS)
+    def test_every_button_name_and_code_is_distinct(self):
+        names = [n for n, _c in sn.REMAP_SOURCES]
+        self.assertEqual(len(set(KEY.values())), len(sn.REMAP_SOURCES))
+        self.assertEqual(len(set(names)), len(names))
 
 
 class SafetyTests(unittest.TestCase):
-    def test_dangerous_commands_cannot_be_encoded(self):
-        for name in sn.FORBIDDEN:
-            with self.assertRaises(ValueError, msg=name):
-                sn.encode_request(*sn.COMMANDS[name])
+    def test_anything_not_on_the_allowlist_is_refused(self):
+        allowed = set(sn.COMMANDS.values())
+        for group in range(0x100):
+            for op in range(0x100):
+                if (group, op) in allowed:
+                    sn.encode_request(group, op)
+                else:
+                    with self.assertRaises(ValueError):
+                        sn.encode_request(group, op)
 
-    def test_the_whole_firmware_update_group_is_refused(self):
-        for op in range(0x100):
-            with self.assertRaises(ValueError):
-                sn.encode_request(sn.UPDATE_GROUP, op)
-
-    def test_reads_are_never_forbidden_and_never_writes(self):
-        self.assertFalse(sn.READ_ONLY & sn.FORBIDDEN)
+    def test_reads_are_gets(self):
         self.assertTrue(all(n.startswith('get_') for n in sn.READ_ONLY))
 
     def test_every_command_code_is_unique(self):

@@ -13,6 +13,8 @@ from vendors.gamesir.models.supernova import config as nova
 from vendors.gamesir.models.supernova import protocol as sn
 from vendors.gamesir.models.supernova import transport
 
+KEY = dict(sn.REMAP_SOURCES)       # button name -> key code
+
 FIXTURE = json.loads((ROOT / 'tests' / 'fixtures' / 'supernova_capture01.json').read_text())
 
 
@@ -108,11 +110,28 @@ class WriteTests(unittest.TestCase):
 
     def test_data_aimed_at_a_different_button_is_refused(self):
         pad = FakePad()
-        a = nova.BLOCKS[f'key_mapping/00/{sn.KEYS["CRO"]:02x}']
-        b_data = nova.read_block(pad, nova.BLOCKS[f'key_mapping/00/{sn.KEYS["CIR"]:02x}'])
+        a = nova.BLOCKS[f'key_mapping/00/{KEY["A"]:02x}']
+        b_data = nova.read_block(pad, nova.BLOCKS[f'key_mapping/00/{KEY["B"]:02x}'])
         with self.assertRaises(nova.PadError):
             nova.write_block(pad, a, b_data)
         self.assertEqual(pad.writes(), [])
+
+    def test_a_write_whose_reply_times_out_is_put_back(self):
+        pad = FakePad()
+        block = nova.BLOCKS['vibrate_param']
+        old = nova.read_block(pad, block)
+        real = pad.request
+
+        def lost_reply(name, payload=b''):
+            body = real(name, payload)
+            if name == 'set_vibrate_param' and payload != old:
+                raise TimeoutError('no reply')      # landed, but the reply was lost
+            return body
+        pad.request = lost_reply
+        with self.assertRaises(TimeoutError):
+            nova.write_block(pad, block, bytes.fromhex('194b00004b4b'))
+        self.assertEqual(nova.read_block(pad, block), old)
+        self.assertEqual(pad.saves, 0)
 
     def test_an_unchanged_block_is_not_written(self):
         pad = FakePad()
@@ -125,9 +144,9 @@ class RestoreTests(unittest.TestCase):
     def test_restore_undoes_a_change_and_verifies_zero_diff(self):
         pad = FakePad()
         backup = nova.snapshot(pad)
-        block = nova.BLOCKS[f'key_mapping/00/{sn.KEYS["CRO"]:02x}']
+        block = nova.BLOCKS[f'key_mapping/00/{KEY["A"]:02x}']
         nova.write_block(pad, block, sn.with_key_target(nova.read_block(pad, block),
-                                                        sn.KEYS['CIR']))
+                                                        KEY['B']))
         nova.save(pad)
         self.assertTrue(nova.diff(backup, nova.snapshot(pad)))
         written, skipped, remaining = nova.restore(pad, backup)

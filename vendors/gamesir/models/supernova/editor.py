@@ -140,8 +140,11 @@ def apply_edits(link, edits):
     done = []
     try:
         for block, old, new in writes:
-            nova.write_block(link, block, new)     # verifies; undoes itself on mismatch
+            # Listed before the write: a write whose reply times out may still
+            # have landed, so the failing block is undone too. Undoing a block
+            # that still holds `old` writes nothing.
             done.append((block, old))
+            nova.write_block(link, block, new)     # verifies; undoes itself on failure
     except Exception:
         for block, old in reversed(done):
             try:
